@@ -22,7 +22,7 @@ export function render({ items, mode, generatedAt }) {
         .map((it, idx) => {
             const id = esc(it.link);
             return `
-    <article class="card" data-link="${id}">
+    <article class="card" data-link="${id}" data-title="${esc(it.title)}" data-topic="${esc(it.topic || 'General')}">
       <div class="rank">${idx + 1}</div>
       <div class="body">
         <div class="meta">
@@ -96,7 +96,8 @@ ${cards}
 
   <footer>
     Generated ${esc(new Date(generatedAt).toLocaleString())}.
-    👍/👎 are saved in your browser — feeding them back into the taste profile is the next iteration.
+    👍/👎 are saved in your browser. <button id="export" class="fb">⬇ Export feedback</button>
+    — save as <code>bedtime-feed/feedback.json</code> and run <code>node build.mjs --tune</code> to get profile suggestions.
   </footer>
 </div>
 
@@ -116,6 +117,20 @@ ${cards}
       });
     });
   }
+
+  // Export votes (with title + topic) as feedback.json for the --tune loop.
+  document.getElementById('export').addEventListener('click', () => {
+    const cards = [...document.querySelectorAll('.card')];
+    const out = Object.entries(store).map(([link, vote]) => {
+      const c = cards.find((el) => el.dataset.link === link);
+      return { link, vote, title: c?.dataset.title || '', topic: c?.dataset.topic || '' };
+    });
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'feedback.json';
+    a.click();
+  });
 </script>
 </body>
 </html>`;

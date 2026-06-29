@@ -1,2 +1,6 @@
 # Generated briefing output
 dist/
+
+# Local secrets
+.env.local
+.env
