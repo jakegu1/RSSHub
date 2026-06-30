@@ -1,0 +1,63 @@
+# Bedtime Briefing — autonomous nightly build, deployed to GitHub Pages.
+#
+# This is a self-running project: GitHub's runners have full internet, run on a
+# schedule, and publish to a fixed Pages URL. No one has to run any command.
+#
+# SETUP (one-time, all doable from the GitHub mobile/web UI):
+#   1. Repo → Settings → Secrets and variables → Actions → New repository secret:
+#        DEEPSEEK_API_KEY = your DeepSeek key            (required)
+#        FEISHU_WEBHOOK   = your Feishu bot webhook URL   (optional, for push)
+#        FEISHU_SECRET    = Feishu signature secret       (optional)
+#   2. Repo → Settings → Pages → Build and deployment → Source: "GitHub Actions".
+#   3. Scheduled runs only fire from the DEFAULT branch — merge this branch to
+#      main/master to activate the nightly cron. Until then, trigger manually with
+#      "Run workflow" (Actions tab) or via the API (e.g. from Hermes).
+#
+# Adjust the cron below to ~30 min before bedtime. Times are UTC.
+#   '30 14 * * *'  == 22:30 China Standard Time (UTC+8). Change as needed.
+
+name: Bedtime Feed
+
+on:
+  schedule:
+    - cron: '30 14 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: bedtime-feed
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build briefing
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          FEISHU_SECRET: ${{ secrets.FEISHU_SECRET }}
+          # Canonical published URL of the project Pages site, for the Feishu link.
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: node bedtime-feed/build.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: bedtime-feed/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

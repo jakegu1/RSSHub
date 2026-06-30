@@ -15,6 +15,7 @@ import { sources, profile } from './feed.config.mjs';
 import { fetchFeed } from './lib/rss.mjs';
 import { dedupe, curate, tuneFromFeedback } from './lib/curate.mjs';
 import { render } from './lib/render.mjs';
+import { notifyFeishu } from './lib/notify-feishu.mjs';
 import { sampleItems } from './lib/sample-items.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -108,10 +109,20 @@ async function runBuild() {
 
     reportHitRate(scoredPool, new Set(items.map((it) => it.link)));
 
-    const html = render({ items, mode, generatedAt: Date.now() });
+    const generatedAt = Date.now();
+    const html = render({ items, mode, generatedAt });
     const outPath = join(here, 'dist', 'index.html');
     await writeFile(outPath, html, 'utf8');
-    console.log(`\n  ✅ Wrote ${outPath}\n`);
+    console.log(`\n  ✅ Wrote ${outPath}`);
+
+    // Optional Feishu push (no-op unless FEISHU_WEBHOOK is set). SITE_URL is the
+    // published Pages URL, injected by the GitHub Action.
+    const fr = await notifyFeishu({ items, url: process.env.SITE_URL || '', generatedAt }).catch((e) => {
+        console.warn(`  ⚠ Feishu notify failed: ${e.message}`);
+        return {};
+    });
+    if (fr?.ok) console.log('  📨 Sent Feishu notification');
+    console.log('');
 }
 
 (TUNE ? runTune() : runBuild()).catch((err) => {

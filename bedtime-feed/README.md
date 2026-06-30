@@ -72,11 +72,18 @@ you like into `feed.config.mjs`.
 > so live fetching and the DeepSeek call may `403` *inside this repo's web session*.
 > Both work from your own machine. `--demo` always works.
 
-## Make it a nightly habit
+## Runs itself (GitHub Actions → Pages → Feishu)
 
-- **Schedule** `build.mjs` every evening (cron / GitHub Action).
-- **Publish `dist/index.html`** to Vercel/Netlify/Pages → a fresh page each night at a stable URL.
-- **RSSHub for platform feeds** (Bilibili / Xiaohongshu): point `RSSHUB_BASE` at your own instance (this repo) for reliability.
+This ships as an **autonomous project** — no manual command-running:
+
+- `.github/workflows/bedtime-feed.yml` builds nightly on GitHub's runners (full
+  internet), deploys `dist/` to **GitHub Pages**, and pushes a compact briefing to
+  **Feishu** (the project notifies you itself).
+- Setup + Hermes's overseer role: see `HANDOFF.md`.
+- Extra delivery env vars: `FEISHU_WEBHOOK`, `FEISHU_SECRET` (optional),
+  `SITE_URL` (the Action sets this to the Pages URL for the Feishu link).
+- **RSSHub for platform feeds** (Bilibili / Xiaohongshu): point `RSSHUB_BASE` at
+  your own instance for reliability.
 
 ## Next iterations
 

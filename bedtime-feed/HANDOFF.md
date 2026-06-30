@@ -1,65 +1,53 @@
-# Handoff brief — for Hermes (or any cloud runner)
+# How this project runs (and Hermes's role)
 
-You are taking over **running and hosting** this tool. It is already built. Do
-**not** rebuild it from scratch — clone the branch and run the committed code.
-Read `bedtime-feed/README.md` first for the full design.
+This is an **autonomous project**, not a daily chore for Hermes. It runs itself on
+GitHub Actions and publishes to GitHub Pages. Nobody runs commands by hand.
 
-## What this is
+```
+GitHub Actions (nightly cron)
+  → node bedtime-feed/build.mjs      (fetch → dedupe → DeepSeek curate → render)
+  → deploy bedtime-feed/dist to GitHub Pages   (fixed URL, opened before bed)
+  → POST a compact briefing to Feishu          (the project notifies you itself)
+```
 
-A nightly "bedtime briefing": fetch many RSS/Atom sources → dedupe → an LLM
-editor scores/summarizes/clusters them against the reader's taste profile and
-filters out adrenaline → renders one static HTML page.
+Workflow: `.github/workflows/bedtime-feed.yml`. Design: `bedtime-feed/README.md`.
 
-## Where the code is
+## One-time setup (all from the GitHub mobile/web UI)
 
-- Repo: `jakegu1/RSSHub`
-- Branch: `claude/personalized-feed-curation-gncmpg`
-- Directory: `bedtime-feed/`
+1. **Secrets** — Repo → Settings → Secrets and variables → Actions:
+   - `DEEPSEEK_API_KEY` (required)
+   - `FEISHU_WEBHOOK` (optional — custom-bot webhook URL for the push)
+   - `FEISHU_SECRET` (optional — only if the bot has signature verification on)
+2. **Pages** — Repo → Settings → Pages → Source: **GitHub Actions**.
+3. **Activate the cron** — scheduled runs only fire from the **default branch**,
+   so merge `claude/personalized-feed-curation-gncmpg` into main to turn on the
+   nightly schedule. Before that, runs are manual (Actions → Run workflow, or API).
+4. **Timezone** — edit the `cron:` line in the workflow to ~30 min before bedtime
+   (it's in UTC; `30 14 * * *` = 22:30 UTC+8).
 
-## Runtime
+## Roles — who does what
 
-- Node 18+ (uses native `fetch`). **Zero install** — no `npm install` needed.
-- Entry point:
-  - `node bedtime-feed/build.mjs` → writes `bedtime-feed/dist/index.html`
-  - `node bedtime-feed/build.mjs --demo` → offline sample data (smoke test, no key/network)
-  - `node bedtime-feed/build.mjs --tune` → reads `bedtime-feed/feedback.json`, prints suggested taste-profile edits
+| Role | Owner | Notes |
+|---|---|---|
+| **Write / change code** | Claude Code (me) | Hermes's base model is weaker at code — don't ask it to edit the pipeline. Want a new source, a prompt tweak, a feature? Tell Claude Code; it commits to the branch. |
+| **Run the daily feed** | GitHub Actions | Fully autonomous once merged. The project sends its own Feishu message — Hermes is not in the daily path. |
+| **Deliver** | GitHub Pages + Feishu | Pages = the page; Feishu = the nightly ping with the link. |
+| **Oversee** | Hermes (optional) | The good fit for Hermes — see below. |
 
-## Secrets (read from your own secret store — never commit)
+## What Hermes is genuinely good for here (no coding required)
 
-| Env var | Value |
-|---|---|
-| `DEEPSEEK_API_KEY` | the reader's DeepSeek key |
-| `LLM_BASE_URL` (optional) | defaults to `https://api.deepseek.com` |
-| `LLM_MODEL` (optional) | defaults to `deepseek-chat` |
-| `RSSHUB_BASE` (optional) | your RSSHub instance for Bilibili/Xiaohongshu feeds |
+- **Monitor & alert.** Poll the GitHub Actions API for this workflow; if a run
+  fails (bad key, source outage), send *you* a Feishu message. Watching, not doing.
+- **On-demand trigger.** Kick a fresh build via the API
+  (`POST /repos/jakegu1/RSSHub/actions/workflows/bedtime-feed.yml/dispatches`,
+  `ref` = the active branch) when you say "给我今天的简报" — useful before the
+  branch is merged, or for an extra mid-day run.
+- **Relay your edits to Claude Code.** When you tell Hermes "少点币价新闻", it can
+  open an issue / message Claude Code to make the change, rather than editing code itself.
 
-The repo's `.env.local` is gitignored and not present in a fresh clone — inject
-these via your environment.
+## Hard rules
 
-## Tasks for you
-
-1. **Nightly build.** Cron `node bedtime-feed/build.mjs` once each evening
-   (reader's local time, ~30 min before bed — confirm timezone). Sources that
-   fail are skipped automatically; a build with ≥1 source is fine.
-2. **Deliver the result.** Pick one:
-   - Serve `bedtime-feed/dist/index.html` at a stable URL the reader opens before bed, **or**
-   - Push it: Telegram / email the briefing (render a text version from the same
-     curated items, or just send the link).
-3. **Close the feedback loop (the upgrade only you can do).**
-   - Host a tiny endpoint the page can POST 👍/👎 to, persist as `feedback.json`.
-   - Weekly, run `--tune` and send the reader the suggested profile edits to
-     approve. Apply approved edits to `feed.config.mjs` and commit.
-4. **Tuning is human-in-the-loop.** Never auto-rewrite `feed.config.mjs`’s
-   `profile` without the reader approving the `--tune` suggestions.
-
-## Editing knobs
-
-- `feed.config.mjs` → `profile` (taste, in plain language) and `sources` (start broad).
-- Each build prints a **per-source hit-rate report** — use it to decide which
-  sources to cut. Don't prune sources blindly; cut only consistent noise.
-
-## Do not
-
-- Re-architect or re-derive the pipeline; the design is deliberate (see README).
-- Commit any API key, or write secrets into `feed.config.mjs` / the HTML output.
-- Auto-narrow the profile from raw thumbs without reader approval.
+- Do **not** rebuild or re-architect the pipeline — run the committed code.
+- Do **not** commit any API key, or write secrets into `feed.config.mjs` or the HTML.
+- Do **not** auto-rewrite the taste `profile` from raw 👍/👎 — `--tune` only
+  *suggests* edits; a human approves them.
